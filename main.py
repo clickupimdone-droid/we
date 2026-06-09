@@ -389,21 +389,10 @@ async def on_message(message: discord.Message):
 @is_admin()
 @commands.has_permissions(manage_nicknames=True)
 async def change_nickname(ctx, old_tag: str, new_tag: str):
-    """
-    Example:
-    !changenickname {II.} {ML}
-    """
-
     changed = 0
     failed = 0
 
-    status_msg = await ctx.send(
-        embed=discord.Embed(
-            title="🔄 Changing Nicknames",
-            description=f"Replacing `{old_tag}` → `{new_tag}`...",
-            color=discord.Color.blurple()
-        )
-    )
+    status_msg = await ctx.send(f"Replacing `{old_tag}` → `{new_tag}`...")
 
     for member in ctx.guild.members:
         if member.bot:
@@ -411,39 +400,29 @@ async def change_nickname(ctx, old_tag: str, new_tag: str):
 
         nickname = member.nick if member.nick else member.name
 
-        if old_tag in nickname:
-            try:
-                new_nickname = nickname.replace(old_tag, new_tag, 1)
+        # Only replace if the exact tag exists as a whole word/chunk, not inside another word
+        if old_tag not in nickname:
+            continue
 
-                # Discord nickname limit
-                if len(new_nickname) > 32:
-                    failed += 1
-                    continue
+        # Check it's not sandwiched inside a word (must have space, start, or end around it)
+        idx = nickname.find(old_tag)
+        before_char = nickname[idx - 1] if idx > 0 else " "
+        after_char = nickname[idx + len(old_tag)] if idx + len(old_tag) < len(nickname) else " "
 
-                await member.edit(
-                    nick=new_nickname,
-                    reason=f"Nickname tag change by {ctx.author}"
-                )
+        if before_char.isalpha() or after_char.isalpha():
+            continue  # skip — tag is inside a word
 
-                changed += 1
-
-            except discord.Forbidden:
+        try:
+            new_nickname = nickname.replace(old_tag, new_tag, 1)
+            if len(new_nickname) > 32:
                 failed += 1
-            except discord.HTTPException:
-                failed += 1
+                continue
+            await member.edit(nick=new_nickname, reason=f"Nickname tag change by {ctx.author}")
+            changed += 1
+        except (discord.Forbidden, discord.HTTPException):
+            failed += 1
 
-    await status_msg.edit(
-        embed=discord.Embed(
-            title="✅ Nickname Update Complete",
-            description=(
-                f"**Replaced:** `{old_tag}` → `{new_tag}`\n\n"
-                f"👤 Changed: **{changed}**\n"
-                f"❌ Failed: **{failed}**"
-            ),
-            color=discord.Color.green(),
-            timestamp=datetime.utcnow()
-        )
-    )
+    await status_msg.edit(content=f"Done. Changed: {changed} | Failed: {failed}")
 
 @bot.command(name="servers")
 @is_admin()

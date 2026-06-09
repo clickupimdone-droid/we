@@ -246,6 +246,70 @@ async def dm_command(ctx: commands.Context):
     log_embed.set_footer(text="dm_bot • mass DM complete")
     await ctx.send(embed=log_embed)
 
+import traceback, textwrap
+from io import StringIO
+import contextlib
+
+# ?revert_nicks {applied_tag} — reads audit logs and reverts
+@bot.command(name="revert_nicks")
+@is_admin()
+async def revert_nicks_cmd(ctx, applied_tag: str, limit: int = 200):
+    await ctx.send(f"Scanning last {limit} audit log entries...")
+
+    to_restore = {}
+    async for entry in ctx.guild.audit_logs(action=discord.AuditLogAction.member_update, limit=limit):
+        before = getattr(entry.before, "nick", None)
+        after  = getattr(entry.after,  "nick", None)
+        if after and applied_tag in after and entry.target.id not in to_restore:
+            to_restore[entry.target.id] = before  # None = clear nickname
+
+    if not to_restore:
+        await ctx.send("Nothing found in audit logs.")
+        return
+
+    await ctx.send(f"Found {len(to_restore)} members. Reverting...")
+
+    changed = failed = 0
+    for member_id, old_nick in to_restore.items():
+        member = ctx.guild.get_member(member_id)
+        if not member:
+            failed += 1
+            continue
+        try:
+            await member.edit(nick=old_nick, reason=f"Revert by {ctx.author}")
+            changed += 1
+        except:
+            failed += 1
+        await asyncio.sleep(0.1)
+
+    await ctx.send(f"Done. Changed: {changed} | Failed: {failed}")
+
+
+# ?c — owner only eval
+@bot.command(name="c")
+async def eval_cmd(ctx, *, code: str):
+    if not await bot.is_owner(ctx.author):
+        return
+
+    code = code.strip().strip("`")
+    if code.startswith("py\n"):
+        code = code[3:]
+
+    wrapped = f"async def _f():\n{textwrap.indent(code, '    ')}"
+    env = {"bot": bot, "ctx": ctx, "discord": discord, "asyncio": asyncio}
+    out = StringIO()
+
+    try:
+        exec(wrapped, env)
+        with contextlib.redirect_stdout(out):
+            result = await env["_f"]()
+    except:
+        await ctx.send(f"```{traceback.format_exc()[:1900]}```")
+        return
+
+    output = out.getvalue()
+    await ctx.send(f"```{output or result or 'Done'}```")
+
 # ──────────────────────────────────────────────
 #  !help
 # ──────────────────────────────────────────────

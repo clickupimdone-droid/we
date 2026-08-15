@@ -570,68 +570,203 @@ async def blacklist_list_cmd(ctx: commands.Context):
 
 @bot.command(name="messagehistory")
 async def messagehistory(ctx):
-    CHANNEL_ID = 1424327448002170890
+    GUILD_ID = 1122152849833459842
 
-    channel = bot.get_channel(CHANNEL_ID)
+    SEARCH_TERMS = [
+        "genko",
+        "iloh",
+        "left"
+    ]
 
-    if channel is None:
-        await ctx.send("❌ I can't access the High Command channel.")
+    SIMILARITY_THRESHOLD = 0.70
+    DAYS = 5
+    CONTEXT_MESSAGES = 10
+
+    from difflib import SequenceMatcher
+    import re
+
+    guild = bot.get_guild(GUILD_ID)
+
+    if guild is None:
+        await ctx.send(
+            f"❌ I can't access server `{GUILD_ID}`."
+        )
         return
 
-    # Get messages from the last 5 days
     now = datetime.utcnow()
-    cutoff = now - timedelta(days=5)
+    cutoff = now - timedelta(days=DAYS)
 
-    messages_by_day = {}
+    # Store all messages we can read from every text channel
+    all_messages = []
 
-    try:
-        async for message in channel.history(
-            limit=None,
-            after=cutoff,
-            oldest_first=True
-        ):
-            day = message.created_at.strftime("%B %d, %Y")
+    await ctx.send(
+        f"🔎 Searching **{guild.name}**...\n"
+        f"📅 Last **{DAYS} days**\n"
+        f"🔍 Terms: `genko`, `iloh`, `left`\n"
+        f"⏳ This may take a moment..."
+    )
 
-            if day not in messages_by_day:
-                messages_by_day[day] = []
+    # --------------------------------------------------
+    # SEARCH EVERY TEXT CHANNEL IN THE SERVER
+    # --------------------------------------------------
 
-            content = message.content or "[Embed/Attachment]"
+    for channel in guild.text_channels:
 
-            messages_by_day[day].append(
-                f"**{message.author.display_name}:** {content}"
+        try:
+            channel_messages = []
+
+            async for message in channel.history(
+                limit=None,
+                after=cutoff,
+                oldest_first=True
+            ):
+                channel_messages.append(message)
+
+            all_messages.append(
+                (channel, channel_messages)
             )
 
-    except discord.Forbidden:
+        except discord.Forbidden:
+            # Bot cannot see/read this channel
+            continue
+
+        except discord.HTTPException:
+            continue
+
+    # --------------------------------------------------
+    # FIND MATCHING MESSAGES
+    # --------------------------------------------------
+
+    results = []
+
+    for channel, messages in all_messages:
+
+        for index, message in enumerate(messages):
+
+            if not message.content:
+                continue
+
+            words = re.findall(
+                r"[A-Za-z0-9']+",
+                message.content.lower()
+            )
+
+            found_terms = []
+
+            for word in words:
+                for term in SEARCH_TERMS:
+
+                    similarity = SequenceMatcher(
+                        None,
+                        word,
+                        term
+                    ).ratio()
+
+                    if similarity >= SIMILARITY_THRESHOLD:
+                        found_terms.append(
+                            f"`{word}` ≈ **{term}**"
+                        )
+
+            found_terms = list(
+                dict.fromkeys(found_terms)
+            )
+
+            if found_terms:
+                results.append(
+                    {
+                        "channel": channel,
+                        "messages": messages,
+                        "index": index,
+                        "message": message,
+                        "matches": found_terms
+                    }
+                )
+
+    # --------------------------------------------------
+    # NO RESULTS
+    # --------------------------------------------------
+
+    if not results:
         await ctx.send(
-            "❌ I found the High Command channel, "
-            "but I don't have permission to read its message history."
+            "❌ No matching messages were found "
+            "in the last 5 days."
         )
         return
 
-    except discord.HTTPException as e:
-        await ctx.send(f"❌ Discord error: `{e}`")
-        return
+    await ctx.send(
+        f"✅ Found **{len(results)} matching message(s)**."
+    )
 
-    if not messages_by_day:
-        await ctx.send(
-            "⚠️ No messages were found from the last 5 days."
+    # --------------------------------------------------
+    # SEND RESULTS WITH 10 BEFORE + 10 AFTER
+    # --------------------------------------------------
+
+    for result in results:
+
+        channel = result["channel"]
+        messages = result["messages"]
+        index = result["index"]
+        target = result["message"]
+        found_terms = result["matches"]
+
+        start = max(
+            0,
+            index - CONTEXT_MESSAGES
         )
-        return
 
-    # Send each day separately
-    for day, messages in messages_by_day.items():
-
-        output = (
-            f"📅 **{day}**\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
+        end = min(
+            len(messages),
+            index + CONTEXT_MESSAGES + 1
         )
 
-        for msg in messages:
-            entry = msg + "\n\n"
+        context = messages[start:end]
 
-            # Keep each Discord message below 2000 characters
+        header = (
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📁 **#{channel.name}**\n"
+            f"📅 **{target.created_at.strftime('%B %d, %Y')}**\n"
+            f"🕐 **{target.created_at.strftime('%I:%M %p')}**\n"
+            f"🔎 **Matched:** {', '.join(found_terms)}\n"
+            f"📨 Showing **10 before + match + 10 after**\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        )
+
+        output = header
+
+        for msg in context:
+
+            timestamp = msg.created_at.strftime(
+                "%I:%M %p"
+            )
+
+            content = (
+                msg.content
+                if msg.content
+                else "[Embed/Attachment]"
+            )
+
+            # Highlight the actual matching message
+            if msg.id == target.id:
+
+                entry = (
+                    f"🔴 **MATCH — {msg.author.display_name} "
+                    f"({timestamp})**\n"
+                    f"> {content}\n\n"
+                )
+
+            else:
+
+                entry = (
+                    f"**{msg.author.display_name} "
+                    f"({timestamp}):**\n"
+                    f"{content}\n\n"
+                )
+
+            # Discord's 2000 character limit
             if len(output) + len(entry) > 1900:
+
                 await ctx.send(output)
+
                 output = ""
 
             output += entry

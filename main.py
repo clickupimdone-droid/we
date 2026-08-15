@@ -568,53 +568,64 @@ async def blacklist_list_cmd(ctx: commands.Context):
         timestamp=datetime.utcnow()
     ))
 
-@bot.command(name="debughistory")
-async def debughistory(ctx):
-    GUILD_ID = 1122152849833459842
+@bot.command(name="messagehistory")
+async def messagehistory(ctx):
+    CHANNEL_ID = 1424327448002170890
+    MESSAGE_LIMIT = 50
 
-    guild = bot.get_guild(GUILD_ID)
+    channel = bot.get_channel(CHANNEL_ID)
 
-    if guild is None:
+    if channel is None:
+        await ctx.send("❌ I can't access the High Command channel.")
+        return
+
+    try:
+        messages = []
+
+        async for message in channel.history(
+            limit=MESSAGE_LIMIT,
+            oldest_first=False
+        ):
+            messages.append(
+                f"**{message.author.display_name}:** "
+                f"{message.content or '[Embed/Attachment]'}"
+            )
+
+    except discord.Forbidden:
         await ctx.send(
-            f"❌ I can't access **{GUILD_ID}**.\n"
-            "Make sure the bot is actually in that server."
+            "❌ I found the High Command channel, "
+            "but I don't have permission to read its message history."
         )
         return
 
-    await ctx.send(
-        f"✅ Found **{guild.name}**\n"
-        f"🏠 Server ID: `{guild.id}`\n"
-        f"📁 Channels: `{len(guild.channels)}`\n\n"
-        "🔎 Looking for channels containing `highcommand`..."
+    except discord.HTTPException as e:
+        await ctx.send(f"❌ Discord error: `{e}`")
+        return
+
+    if not messages:
+        await ctx.send("⚠️ No messages were found.")
+        return
+
+    header = (
+        "📜 **High Command Message History**\n"
+        "Channel: `#┃high-command┃`\n"
+        f"Showing the latest **{len(messages)} messages**.\n\n"
     )
 
-    matches = []
+    output = header + "\n".join(messages)
 
-    for channel in guild.text_channels:
-        normalized = (
-            channel.name
-            .lower()
-            .replace("-", "")
-            .replace("_", "")
-            .replace(" ", "")
-        )
+    # Discord message limit = 2000 characters
+    while len(output) > 2000:
+        split_at = output.rfind("\n", 0, 2000)
 
-        if "highcommand" in normalized:
-            matches.append(channel)
+        if split_at == -1:
+            split_at = 2000
 
-    if not matches:
-        await ctx.send(
-            "❌ I couldn't find any channel resembling `highcommand`."
-        )
-        return
+        await ctx.send(output[:split_at])
+        output = output[split_at:].lstrip()
 
-    result = "✅ **Matching channels found:**\n\n"
-
-    for channel in matches:
-        result += f"• `#{channel.name}` — `{channel.id}`\n"
-
-    await ctx.send(result)
-
+    if output:
+        await ctx.send(output)
 
 
 # ──────────────────────────────────────────────

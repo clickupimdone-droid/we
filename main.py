@@ -569,69 +569,6 @@ async def blacklist_list_cmd(ctx: commands.Context):
     ))
 
 @bot.command(name="debughistory")
-@commands.has_permissions(administrator=True)
-async def debughistory(ctx):
-    GUILD_ID = 1314617304595693640
-    MESSAGE_LIMIT = 20
-
-    guild = bot.get_guild(GUILD_ID)
-
-    if guild is None:
-        await ctx.send(
-            f"❌ I can't find/access server `{GUILD_ID}`."
-        )
-        return
-
-    await ctx.send(
-        f"🔎 Found server: **{guild.name}**\n"
-        f"Checking the latest **{MESSAGE_LIMIT} messages** from its text channels..."
-    )
-
-    found = False
-
-    for channel in guild.text_channels:
-        try:
-            messages = []
-
-            async for message in channel.history(
-                limit=MESSAGE_LIMIT,
-                oldest_first=False
-            ):
-                messages.append(
-                    f"`{message.author.display_name}`: {message.content or '[embed/attachment]'}"
-                )
-
-            if messages:
-                found = True
-
-                output = (
-                    f"**#{channel.name}**\n"
-                    f"```text\n"
-                    + "\n".join(messages)
-                    + "\n```"
-                )
-
-                # Discord's message limit
-                if len(output) > 2000:
-                    output = output[:1990] + "\n```"
-
-                await ctx.send(output)
-
-        except discord.Forbidden:
-            await ctx.send(
-                f"🔒 Can't read `#{channel.name}` — "
-                f"missing **View Channel** or **Read Message History**."
-            )
-
-        except discord.HTTPException as e:
-            await ctx.send(
-                f"⚠️ Error reading `#{channel.name}`: `{e}`"
-            )
-
-    if not found:
-        await ctx.send("❌ I couldn't read any messages from the server.")
-
-@bot.command(name="debughistory")
 async def debughistory(ctx):
     GUILD_ID = 1122152849833459842
 

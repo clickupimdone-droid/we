@@ -654,6 +654,10 @@ async def on_command_error(ctx: commands.Context, error):
         ))
         raise error
 
+@bot.command(name="ping")
+async def ping(ctx):
+    await ctx.send("🏓 Pong! The bot is receiving commands.")
+
 # ──────────────────────────────────────────────
 #  RUN
 # ──────────────────────────────────────────────

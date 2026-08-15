@@ -631,6 +631,47 @@ async def debughistory(ctx):
     if not found:
         await ctx.send("❌ I couldn't read any messages from the server.")
 
+@bot.command(name="debughistory")
+async def debughistory(ctx):
+    GUILD_ID = 1314617304595693640
+
+    guild = bot.get_guild(GUILD_ID)
+
+    if guild is None:
+        await ctx.send(
+            f"❌ Bot cannot see server `{GUILD_ID}`."
+        )
+        return
+
+    await ctx.send(
+        f"✅ Found server: **{guild.name}**\n"
+        f"📁 Text channels: **{len(guild.text_channels)}**"
+    )
+
+    for channel in guild.text_channels:
+        try:
+            latest = []
+
+            async for message in channel.history(limit=5):
+                latest.append(
+                    f"**{message.author.display_name}:** "
+                    f"{message.content or '[embed/attachment]'}"
+                )
+
+            if latest:
+                text = (
+                    f"### #{channel.name}\n"
+                    + "\n".join(latest)
+                )
+
+                # Don't exceed Discord's 2000 character limit
+                await ctx.send(text[:1900])
+
+        except discord.Forbidden:
+            await ctx.send(
+                f"🔒 Can't read `#{channel.name}`"
+            )
+
 
 
 # ──────────────────────────────────────────────

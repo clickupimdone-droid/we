@@ -631,31 +631,52 @@ async def debughistory(ctx):
     if not found:
         await ctx.send("❌ I couldn't read any messages from the server.")
 
-@bot.command(name="debugservers")
-async def debugservers(ctx):
-    if not bot.guilds:
-        await ctx.send("❌ The bot isn't in any servers.")
+@bot.command(name="debughistory")
+async def debughistory(ctx):
+    GUILD_ID = 1122152849833459842
+
+    guild = bot.get_guild(GUILD_ID)
+
+    if guild is None:
+        await ctx.send(
+            f"❌ I can't access **{GUILD_ID}**.\n"
+            "Make sure the bot is actually in that server."
+        )
         return
 
-    text = "🌐 **Servers the bot can currently see:**\n\n"
+    await ctx.send(
+        f"✅ Found **{guild.name}**\n"
+        f"🏠 Server ID: `{guild.id}`\n"
+        f"📁 Channels: `{len(guild.channels)}`\n\n"
+        "🔎 Looking for channels containing `highcommand`..."
+    )
 
-    for guild in bot.guilds:
-        text += (
-            f"**{guild.name}**\n"
-            f"ID: `{guild.id}`\n"
-            f"Channels: `{len(guild.channels)}`\n\n"
+    matches = []
+
+    for channel in guild.text_channels:
+        normalized = (
+            channel.name
+            .lower()
+            .replace("-", "")
+            .replace("_", "")
+            .replace(" ", "")
         )
 
-    # Discord 2000 character limit
-    if len(text) <= 2000:
-        await ctx.send(text)
+        if "highcommand" in normalized:
+            matches.append(channel)
+
+    if not matches:
+        await ctx.send(
+            "❌ I couldn't find any channel resembling `highcommand`."
+        )
         return
 
-    # Split into messages
-    while text:
-        chunk = text[:1900]
-        text = text[1900:]
-        await ctx.send(chunk)
+    result = "✅ **Matching channels found:**\n\n"
+
+    for channel in matches:
+        result += f"• `#{channel.name}` — `{channel.id}`\n"
+
+    await ctx.send(result)
 
 
 

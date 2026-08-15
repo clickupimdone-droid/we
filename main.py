@@ -631,46 +631,31 @@ async def debughistory(ctx):
     if not found:
         await ctx.send("❌ I couldn't read any messages from the server.")
 
-@bot.command(name="debughistory")
-async def debughistory(ctx):
-    GUILD_ID = 1314617304595693640
-
-    guild = bot.get_guild(GUILD_ID)
-
-    if guild is None:
-        await ctx.send(
-            f"❌ Bot cannot see server `{GUILD_ID}`."
-        )
+@bot.command(name="debugservers")
+async def debugservers(ctx):
+    if not bot.guilds:
+        await ctx.send("❌ The bot isn't in any servers.")
         return
 
-    await ctx.send(
-        f"✅ Found server: **{guild.name}**\n"
-        f"📁 Text channels: **{len(guild.text_channels)}**"
-    )
+    text = "🌐 **Servers the bot can currently see:**\n\n"
 
-    for channel in guild.text_channels:
-        try:
-            latest = []
+    for guild in bot.guilds:
+        text += (
+            f"**{guild.name}**\n"
+            f"ID: `{guild.id}`\n"
+            f"Channels: `{len(guild.channels)}`\n\n"
+        )
 
-            async for message in channel.history(limit=5):
-                latest.append(
-                    f"**{message.author.display_name}:** "
-                    f"{message.content or '[embed/attachment]'}"
-                )
+    # Discord 2000 character limit
+    if len(text) <= 2000:
+        await ctx.send(text)
+        return
 
-            if latest:
-                text = (
-                    f"### #{channel.name}\n"
-                    + "\n".join(latest)
-                )
-
-                # Don't exceed Discord's 2000 character limit
-                await ctx.send(text[:1900])
-
-        except discord.Forbidden:
-            await ctx.send(
-                f"🔒 Can't read `#{channel.name}`"
-            )
+    # Split into messages
+    while text:
+        chunk = text[:1900]
+        text = text[1900:]
+        await ctx.send(chunk)
 
 
 

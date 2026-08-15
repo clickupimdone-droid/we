@@ -559,6 +559,77 @@ async def blacklist_list_cmd(ctx: commands.Context):
         timestamp=datetime.utcnow()
     ))
 
+@bot.command()
+@commands.dm_only()
+async def messagehistory(ctx):
+    # Change this to however many messages you want
+    MESSAGE_LIMIT = 50
+
+    target_channel = None
+
+    # Search every server the bot is in
+    for guild in bot.guilds:
+        for channel in guild.text_channels:
+            # Finds names like:
+            # highcommand
+            # high-command
+            # high_command
+            # highcommand-chat
+            # highcommand-general
+            channel_name = channel.name.lower().replace("-", "").replace("_", "").replace(" ", "")
+
+            if "highcommand" in channel_name:
+                target_channel = channel
+                break
+
+        if target_channel:
+            break
+
+    if not target_channel:
+        await ctx.send("❌ I couldn't find a channel similar to `highcommand`.")
+        return
+
+    messages = []
+
+    try:
+        async for message in target_channel.history(limit=MESSAGE_LIMIT, oldest_first=False):
+            if not message.author.bot:
+                messages.append(
+                    f"**{message.author.display_name}:** {message.content}"
+                )
+
+    except discord.Forbidden:
+        await ctx.send(
+            f"❌ I found `{target_channel.name}`, but I don't have permission to read its messages."
+        )
+        return
+
+    if not messages:
+        await ctx.send(f"`#{target_channel.name}` has no readable messages.")
+        return
+
+    # Discord messages have a 2000 character limit
+    output = f"📜 **Message History — #{target_channel.name}**\n\n"
+    output += "\n".join(messages)
+
+    # Split into multiple DMs if necessary
+    chunks = []
+
+    while len(output) > 2000:
+        split_at = output.rfind("\n", 0, 2000)
+
+        if split_at == -1:
+            split_at = 2000
+
+        chunks.append(output[:split_at])
+        output = output[split_at:].lstrip()
+
+    chunks.append(output)
+
+    for chunk in chunks:
+        await ctx.send(chunk)
+
+
 # ──────────────────────────────────────────────
 #  ERROR HANDLING
 # ──────────────────────────────────────────────

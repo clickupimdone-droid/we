@@ -571,7 +571,6 @@ async def blacklist_list_cmd(ctx: commands.Context):
 @bot.command(name="messagehistory")
 async def messagehistory(ctx):
     CHANNEL_ID = 1424327448002170890
-    MESSAGE_LIMIT = 50
 
     channel = bot.get_channel(CHANNEL_ID)
 
@@ -579,16 +578,27 @@ async def messagehistory(ctx):
         await ctx.send("❌ I can't access the High Command channel.")
         return
 
-    try:
-        messages = []
+    # Get messages from the last 5 days
+    now = datetime.utcnow()
+    cutoff = now - timedelta(days=5)
 
+    messages_by_day = {}
+
+    try:
         async for message in channel.history(
-            limit=MESSAGE_LIMIT,
-            oldest_first=False
+            limit=None,
+            after=cutoff,
+            oldest_first=True
         ):
-            messages.append(
-                f"**{message.author.display_name}:** "
-                f"{message.content or '[Embed/Attachment]'}"
+            day = message.created_at.strftime("%B %d, %Y")
+
+            if day not in messages_by_day:
+                messages_by_day[day] = []
+
+            content = message.content or "[Embed/Attachment]"
+
+            messages_by_day[day].append(
+                f"**{message.author.display_name}:** {content}"
             )
 
     except discord.Forbidden:
@@ -602,30 +612,32 @@ async def messagehistory(ctx):
         await ctx.send(f"❌ Discord error: `{e}`")
         return
 
-    if not messages:
-        await ctx.send("⚠️ No messages were found.")
+    if not messages_by_day:
+        await ctx.send(
+            "⚠️ No messages were found from the last 5 days."
+        )
         return
 
-    header = (
-        "📜 **High Command Message History**\n"
-        "Channel: `#┃high-command┃`\n"
-        f"Showing the latest **{len(messages)} messages**.\n\n"
-    )
+    # Send each day separately
+    for day, messages in messages_by_day.items():
 
-    output = header + "\n".join(messages)
+        output = (
+            f"📅 **{day}**\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+        )
 
-    # Discord message limit = 2000 characters
-    while len(output) > 2000:
-        split_at = output.rfind("\n", 0, 2000)
+        for msg in messages:
+            entry = msg + "\n\n"
 
-        if split_at == -1:
-            split_at = 2000
+            # Keep each Discord message below 2000 characters
+            if len(output) + len(entry) > 1900:
+                await ctx.send(output)
+                output = ""
 
-        await ctx.send(output[:split_at])
-        output = output[split_at:].lstrip()
+            output += entry
 
-    if output:
-        await ctx.send(output)
+        if output.strip():
+            await ctx.send(output)
 
 
 # ──────────────────────────────────────────────

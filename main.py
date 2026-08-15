@@ -568,75 +568,68 @@ async def blacklist_list_cmd(ctx: commands.Context):
         timestamp=datetime.utcnow()
     ))
 
-@bot.command()
-@commands.dm_only()
-async def messagehistory(ctx):
-    # Change this to however many messages you want
-    MESSAGE_LIMIT = 50
+@bot.command(name="debughistory")
+@commands.has_permissions(administrator=True)
+async def debughistory(ctx):
+    GUILD_ID = 1314617304595693640
+    MESSAGE_LIMIT = 20
 
-    target_channel = None
+    guild = bot.get_guild(GUILD_ID)
 
-    # Search every server the bot is in
-    for guild in bot.guilds:
-        for channel in guild.text_channels:
-            # Finds names like:
-            # highcommand
-            # high-command
-            # high_command
-            # highcommand-chat
-            # highcommand-general
-            channel_name = channel.name.lower().replace("-", "").replace("_", "").replace(" ", "")
-
-            if "highcommand" in channel_name:
-                target_channel = channel
-                break
-
-        if target_channel:
-            break
-
-    if not target_channel:
-        await ctx.send("❌ I couldn't find a channel similar to `highcommand`.")
-        return
-
-    messages = []
-
-    try:
-        async for message in target_channel.history(limit=MESSAGE_LIMIT, oldest_first=False):
-            if not message.author.bot:
-                messages.append(
-                    f"**{message.author.display_name}:** {message.content}"
-                )
-
-    except discord.Forbidden:
+    if guild is None:
         await ctx.send(
-            f"❌ I found `{target_channel.name}`, but I don't have permission to read its messages."
+            f"❌ I can't find/access server `{GUILD_ID}`."
         )
         return
 
-    if not messages:
-        await ctx.send(f"`#{target_channel.name}` has no readable messages.")
-        return
+    await ctx.send(
+        f"🔎 Found server: **{guild.name}**\n"
+        f"Checking the latest **{MESSAGE_LIMIT} messages** from its text channels..."
+    )
 
-    # Discord messages have a 2000 character limit
-    output = f"📜 **Message History — #{target_channel.name}**\n\n"
-    output += "\n".join(messages)
+    found = False
 
-    # Split into multiple DMs if necessary
-    chunks = []
+    for channel in guild.text_channels:
+        try:
+            messages = []
 
-    while len(output) > 2000:
-        split_at = output.rfind("\n", 0, 2000)
+            async for message in channel.history(
+                limit=MESSAGE_LIMIT,
+                oldest_first=False
+            ):
+                messages.append(
+                    f"`{message.author.display_name}`: {message.content or '[embed/attachment]'}"
+                )
 
-        if split_at == -1:
-            split_at = 2000
+            if messages:
+                found = True
 
-        chunks.append(output[:split_at])
-        output = output[split_at:].lstrip()
+                output = (
+                    f"**#{channel.name}**\n"
+                    f"```text\n"
+                    + "\n".join(messages)
+                    + "\n```"
+                )
 
-    chunks.append(output)
+                # Discord's message limit
+                if len(output) > 2000:
+                    output = output[:1990] + "\n```"
 
-    for chunk in chunks:
-        await ctx.send(chunk)
+                await ctx.send(output)
+
+        except discord.Forbidden:
+            await ctx.send(
+                f"🔒 Can't read `#{channel.name}` — "
+                f"missing **View Channel** or **Read Message History**."
+            )
+
+        except discord.HTTPException as e:
+            await ctx.send(
+                f"⚠️ Error reading `#{channel.name}`: `{e}`"
+            )
+
+    if not found:
+        await ctx.send("❌ I couldn't read any messages from the server.")
 
 
 
